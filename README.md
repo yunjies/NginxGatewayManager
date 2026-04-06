@@ -118,9 +118,9 @@ npm run build        # 安装包版
 ```
 yourusername.github.io/
 ├── cctv/
-│   └── index.html    → 重定向到 https://yourdomain.com:13801
+│   └── index.html    → 重定向到 https://yourdomain.com:8081
 ├── jellyfin/
-│   └── index.html    → 重定向到 https://yourdomain.com:13880
+│   └── index.html    → 重定向到 https://yourdomain.com:8080
 └── homeassistant/
     └── worker.js     → Cloudflare Worker 路由
 ```
