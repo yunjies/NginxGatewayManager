@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nginx Gateway Manager</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- 侧边栏 -->
+  <nav class="sidebar">
+    <div class="sidebar-header">
+      <div class="app-logo">⚡</div>
+      <div class="app-name">Nginx Manager</div>
+    </div>
+    <div class="sidebar-nav">
+      <button class="nav-item active" data-page="ssl">
+        <span class="nav-icon">🔐</span><span class="nav-label">SSL 更新</span>
+      </button>
+      <button class="nav-item" data-page="proxy">
+        <span class="nav-icon">🔀</span><span class="nav-label">反代配置</span>
+      </button>
+      <button class="nav-item" data-page="ghlinks">
+        <span class="nav-icon">🔗</span><span class="nav-label">GitHub 链接</span>
+      </button>
+      <button class="nav-item" data-page="status">
+        <span class="nav-icon">📊</span><span class="nav-label">Nginx 状态</span>
+      </button>
+      <button class="nav-item" data-page="settings">
+        <span class="nav-icon">⚙️</span><span class="nav-label">设置</span>
+      </button>
+    </div>
+    <div class="sidebar-footer">
+      <div class="conn-indicator" id="connIndicator">
+        <span class="conn-dot offline"></span>
+        <span class="conn-text">未连接</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- 主内容区 -->
+  <main class="main-content">
+
+    <!-- ════ SSL 更新 ════ -->
+    <div class="page active" id="page-ssl">
+      <div class="page-header">
+        <h2 class="page-title">🔐 SSL 证书更新</h2>
+        <p class="page-subtitle">选择证书 ZIP 包，自动上传、备份、reload nginx</p>
+      </div>
+
+      <div class="server-bar">
+        <span>📡 服务器:</span>
+        <span class="sv-host" id="sv-host-display">—</span>
+        <span class="sv-status" id="sv-status-ssl"></span>
+        <button class="btn-xs" id="btn-test-ssl" onclick="testConnSSL()">测试连接</button>
+      </div>
+
+      <div class="card">
+        <div class="step-badge">1</div>
+        <div class="card-title">选择证书 ZIP 包</div>
+        <div class="file-drop-zone" id="fileDropZone">
+          <div class="drop-icon">📦</div>
+          <div class="drop-text">点击选择或拖放 ZIP 文件</div>
+          <div class="drop-hint">*.zip</div>
+          <div class="selected-file hidden" id="selectedFileInfo">
+            <span class="sel-icon">✅</span>
+            <span class="sel-name" id="selFileName"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card hidden" id="ssl-confirm-card">
+        <div class="step-badge">2</div>
+        <div class="card-title">确认信息</div>
+        <div class="info-grid">
+          <div class="info-label">服务器</div><div class="info-value sv-val">—</div>
+          <div class="info-label">证书路径</div><div class="info-value path-val">—</div>
+          <div class="info-label">ZIP 文件</div><div class="info-value zip-val">—</div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-outline" onclick="sslBack()">重新选择</button>
+          <button class="btn btn-primary" id="btn-start-ssl" onclick="runSSLUpdate()">🚀 开始更新</button>
+        </div>
+      </div>
+
+      <div class="card hidden" id="ssl-log-card">
+        <div class="step-badge">▶</div>
+        <div class="card-title">执行日志</div>
+        <div class="log-box" id="ssl-log-box"></div>
+        <div class="btn-row" id="ssl-after-btns" style="display:none">
+          <button class="btn btn-outline" onclick="sslRestart()">重新开始</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════ 反代配置 ════ -->
+    <div class="page" id="page-proxy">
+      <div class="page-header">
+        <h2 class="page-title">🔀 反向代理配置</h2>
+        <p class="page-subtitle">可视化编辑 nginx 反代规则</p>
+      </div>
+
+      <div class="toolbar">
+        <button class="btn btn-primary" onclick="loadProxyConfig()">📥 加载配置</button>
+        <button class="btn btn-outline" onclick="saveProxyConfig()">💾 保存并重载</button>
+        <span class="toolbar-hint">← 先「加载配置」再编辑 | 保存后自动 nginx -t</span>
+      </div>
+
+      <div class="proxy-layout">
+        <div class="card proxy-table-card">
+          <div class="card-title">📋 端口映射表</div>
+          <div class="proxy-hint">点击「加载配置」从服务器拉取</div>
+          <table class="proxy-table hidden" id="proxyTable">
+            <thead>
+              <tr>
+                <th>外部端口</th>
+                <th>域名</th>
+                <th>目标主机</th>
+                <th>目标端口</th>
+                <th>路径</th>
+              </tr>
+            </thead>
+            <tbody id="proxyTableBody"></tbody>
+          </table>
+        </div>
+
+        <div class="card proxy-editor-card">
+          <div class="card-title">📝 nginx.conf 原始编辑</div>
+          <div class="proxy-hint">在下方直接编辑原始配置</div>
+          <textarea class="conf-editor" id="confEditor" spellcheck="false" placeholder="点击「加载配置」后在此编辑..."></textarea>
+        </div>
+      </div>
+
+      <div class="card hidden" id="proxy-log-card">
+        <div class="log-box" id="proxy-log-box"></div>
+      </div>
+    </div>
+
+    <!-- ════ GitHub 链接 ════ -->
+    <div class="page" id="page-ghlinks">
+      <div class="page-header">
+        <h2 class="page-title">🔗 GitHub 链接管理</h2>
+        <p class="page-subtitle">管理 <code>YOUR_GITHUB_PAGES_REPO</code> 代理链接，支持添加/编辑/删除/同步</p>
+      </div>
+
+      <!-- 工具栏 -->
+      <div class="toolbar">
+        <button class="btn btn-primary" onclick="ghLoadServices()">🔄 刷新列表</button>
+        <button class="btn btn-outline" onclick="openAddService()">➕ 添加链接</button>
+        <div class="toolbar-sep"></div>
+        <button class="btn btn-outline btn-sm" onclick="ghSyncAll()">🔁 全部同步</button>
+        <span class="gh-info" id="gh-info"></span>
+      </div>
+
+      <!-- 服务卡片列表 -->
+      <div id="gh-services-container">
+        <div class="card">
+          <div class="card-title">📡 服务列表</div>
+          <div class="gh-empty-hint" id="gh-empty-hint">
+            点击「🔄 刷新列表」从 GitHub 加载现有服务
+          </div>
+          <div class="service-list" id="service-list"></div>
+        </div>
+      </div>
+
+      <!-- 日志 -->
+      <div class="card hidden" id="ghlinks-log-card">
+        <div class="card-title">📋 操作日志</div>
+        <div class="log-box" id="ghlinks-log-box"></div>
+      </div>
+    </div>
+
+    <!-- ════ Nginx 状态 ════ -->
+    <div class="page" id="page-status">
+      <div class="page-header">
+        <h2 class="page-title">📊 Nginx 状态</h2>
+        <p class="page-subtitle">查看版本、测试配置、服务启停</p>
+      </div>
+
+      <div class="status-grid">
+        <div class="status-card">
+          <div class="status-icon" id="status-icon">⏸️</div>
+          <div class="status-info">
+            <div class="status-name">Nginx 进程</div>
+            <div class="status-val" id="status-val">—</div>
+            <div class="status-detail" id="status-detail"></div>
+          </div>
+        </div>
+        <div class="status-card">
+          <div class="status-icon">🐳</div>
+          <div class="status-info">
+            <div class="status-name">版本</div>
+            <div class="status-val" id="nginx-version">—</div>
+          </div>
+        </div>
+        <div class="status-card status-test">
+          <div class="status-icon">✅</div>
+          <div class="status-info">
+            <div class="status-name">配置测试</div>
+            <div class="status-val" id="nginx-test">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">⚡ 快捷操作</div>
+        <div class="control-grid">
+          <button class="btn btn-outline" onclick="nginxCtrl('start')">▶️ 启动</button>
+          <button class="btn btn-outline" onclick="nginxCtrl('stop')">⏹️ 停止</button>
+          <button class="btn btn-outline" onclick="nginxCtrl('reload')">🔄 重载</button>
+          <button class="btn btn-primary" onclick="nginxCtrl('restart')">🔁 重启</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📋 完整进程信息</div>
+        <pre class="status-pre" id="status-pre">点击「刷新状态」获取信息</pre>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="refreshStatus()">🔍 刷新状态</button>
+      </div>
+
+      <div class="card hidden" id="status-log-card">
+        <div class="log-box" id="status-log-box"></div>
+      </div>
+    </div>
+
+    <!-- ════ 设置 ════ -->
+    <div class="page" id="page-settings">
+      <div class="page-header">
+        <h2 class="page-title">⚙️ 设置</h2>
+        <p class="page-subtitle">服务器连接、反代路径、GitHub 仓库配置</p>
+      </div>
+
+      <div class="settings-layout">
+        <!-- 服务器配置 -->
+        <div class="card">
+          <div class="card-title">🖥️ 服务器连接</div>
+          <div class="form-grid">
+            <label class="form-label">服务器 IP</label>
+            <input class="form-input" type="text" id="set-host" placeholder="YOUR_SERVER_IP">
+            <label class="form-label">SSH 端口</label>
+            <input class="form-input" type="number" id="set-port" value="22">
+            <label class="form-label">用户名</label>
+            <input class="form-input" type="text" id="set-user" placeholder="root">
+            <label class="form-label">密码</label>
+            <input class="form-input" type="password" id="set-pass" placeholder="留空保持不变">
+          </div>
+          <div class="btn-row mt8">
+            <button class="btn btn-outline" onclick="testConnection()">🔗 测试连接</button>
+          </div>
+        </div>
+
+        <!-- Nginx 配置 -->
+        <div class="card">
+          <div class="card-title">📁 Nginx 配置</div>
+          <div class="form-grid">
+            <label class="form-label">SSL 证书目录</label>
+            <input class="form-input" type="text" id="set-ssl-dir" placeholder="/home/YOUR_USERNAME/ssl/domain.com">
+            <label class="form-label">nginx.conf 路径</label>
+            <input class="form-input" type="text" id="set-conf-path" placeholder="/etc/nginx/conf.d/xxx.conf">
+          </div>
+        </div>
+
+        <!-- GitHub 配置 -->
+        <div class="card">
+          <div class="card-title">🔖 GitHub 链接管理</div>
+          <div class="form-grid">
+            <label class="form-label">Personal Access Token</label>
+            <input class="form-input" type="password" id="set-gh-token" placeholder="ghp_xxxxxxxxxxxxx（留空保持不变）">
+            <label class="form-label">仓库 Owner</label>
+            <input class="form-input" type="text" id="set-gh-owner" placeholder="YOUR_USERNAME">
+            <label class="form-label">仓库名称</label>
+            <input class="form-input" type="text" id="set-gh-repo" placeholder="YOUR_GITHUB_PAGES_REPO">
+            <label class="form-label">分支</label>
+            <input class="form-input" type="text" id="set-gh-branch" value="main">
+          </div>
+          <div class="gh-account-info" id="gh-account-info"></div>
+          <div class="btn-row mt8">
+            <button class="btn btn-outline" onclick="testGhConnection()">🔗 测试 GitHub 连接</button>
+          </div>
+        </div>
+
+        <!-- Git 反代配置（保留） -->
+        <div class="card">
+          <div class="card-title">🔖 Git 同步（反代配置）</div>
+          <div class="form-grid">
+            <label class="form-label">启用 Git</label>
+            <div class="form-check-row">
+              <input type="checkbox" id="set-git-enabled">
+              <span class="form-check-label">开启 Git 管理配置</span>
+            </div>
+            <label class="form-label">仓库 URL</label>
+            <input class="form-input" type="text" id="set-git-url" placeholder="git@github.com:xxx/nginx-config.git">
+            <label class="form-label">本地路径</label>
+            <input class="form-input" type="text" id="set-git-path" placeholder="/tmp/nginx-config">
+            <label class="form-label">分支</label>
+            <input class="form-input" type="text" id="set-git-branch" value="main">
+            <label class="form-label">提交信息</label>
+            <input class="form-input" type="text" id="set-git-msg" value="Update nginx config">
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row mt16">
+        <button class="btn btn-primary" onclick="saveSettings()">💾 保存设置</button>
+      </div>
+
+      <div class="card hidden" id="settings-log-card">
+        <div class="log-box" id="settings-log-box"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ════ 添加/编辑服务 模态框 ════ -->
+<div class="modal-overlay hidden" id="serviceModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">添加服务</span>
+      <button class="modal-close" onclick="closeServiceModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <label class="form-label">服务 ID <small>（英文，用于 GitHub 目录名）</small></label>
+        <input class="form-input" type="text" id="svc-id" placeholder="homeassistant">
+        <label class="form-label">服务名称</label>
+        <input class="form-input" type="text" id="svc-name" placeholder="Home Assistant">
+        <label class="form-label">目标 URL <small>（完整重定向地址）</small></label>
+        <input class="form-input" type="text" id="svc-url" placeholder="https://YOUR_DOMAIN:13822">
+        <label class="form-label">说明</label>
+        <input class="form-input" type="text" id="svc-desc" placeholder="家庭智能家居平台">
+        <label class="form-label">格式</label>
+        <div class="form-check-row">
+          <input type="radio" name="svc-format" id="fmt-worker" value="worker.js" checked>
+          <label for="fmt-worker" class="form-check-label">worker.js <small>（Cloudflare Worker，适合多域名路由）</small></label>
+        </div>
+        <div class="form-check-row">
+          <input type="radio" name="svc-format" id="fmt-index" value="index.html">
+          <label for="fmt-index" class="form-check-label">index.html <small>（HTML 重定向，简单可靠）</small></label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeServiceModal()">取消</button>
+      <button class="btn btn-danger hidden" id="btn-delete-service" onclick="deleteService()">🗑️ 删除</button>
+      <button class="btn btn-primary" id="btn-save-service" onclick="saveService()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<script src="renderer.js"></script>
+</body>
+</html>
