@@ -1,6 +1,6 @@
 # Nginx Gateway Manager
 
-一个轻量级的 Nginx 反向代理网关管理工具，基于 Electron + paramiko（SSH2），用于管理远程 Linux 网关上的 SSL 证书更新、Nginx 配置编辑、GitHub Pages 代理链接，以及服务状态监控。
+一个轻量级的 Nginx 反向代理网关管理工具，基于 Electron + ssh2，用于管理远程 Linux 网关上的 SSL 证书更新、Nginx 配置编辑、GitHub Pages 代理链接，以及服务状态监控。
 
 ![Nginx Gateway Manager](https://img.shields.io/badge/Electron-28-blue)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-green)
@@ -33,7 +33,7 @@
 ## 目录结构
 
 ```
-NginxTool/
+NginxGatewayManager/
 ├── src/
 │   ├── main.js      # Electron 主进程（SSH/GitHub API）
 │   ├── preload.js   # 上下文隔离桥接
@@ -58,7 +58,7 @@ NginxTool/
 ### 安装依赖
 
 ```bash
-cd NginxTool
+cd NginxGatewayManager
 npm install
 ```
 
@@ -96,9 +96,9 @@ npm run build        # 安装包版
 
 | 字段 | 说明 | 示例 |
 |------|------|------|
-| 服务器地址 | Nginx 网关 IP | `192.168.1.224` |
+| 服务器地址 | Nginx 网关 IP | `YOUR_SERVER_IP` |
 | SSH 端口 | 默认 22 | `22` |
-| 用户名 | SSH 用户 | `root` |
+| 用户名 | SSH 用户 | `YOUR_USERNAME` |
 | 密码 | SSH 密码 | - |
 | SSL 目录 | 证书存放路径 | `/home/user/ssl` |
 | Nginx 配置路径 | nginx 配置文件路径 | `/etc/nginx/conf.d/domain.conf` |
