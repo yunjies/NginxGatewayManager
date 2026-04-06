@@ -1,0 +1,50 @@
+{
+  "name": "nginx-gateway-manager",
+  "version": "1.0.0",
+  "description": "Nginx Reverse Proxy Gateway Manager - Electron app for managing SSL certs, nginx config, GitHub Pages redirects, and service status on a remote Linux gateway",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64",
+    "build:dir": "electron-builder --win --x64 --dir",
+    "rebuild": "electron-rebuild -f -w ssh2"
+  },
+  "build": {
+    "appId": "com.example.nginx-gateway-manager",
+    "productName": "NginxGatewayManager",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "files": [
+      "src/**/*"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/ssh2/**/*"
+    ]
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.17",
+    "ssh2": "^1.15.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.3",
+    "electron": "^28.2.0",
+    "electron-builder": "^23.3.2"
+  }
+}
