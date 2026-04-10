@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.asar
+.DS_Store
+Thumbs.db
+settings.json

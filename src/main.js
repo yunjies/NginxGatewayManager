@@ -383,6 +383,57 @@ function setupIpcHandlers() {
     }
   });
 
+  // 从规则列表生成 nginx.conf 并保存到服务器
+  ipcMain.handle('save-proxy-rules', async (_, rules) => {
+    try {
+      const settings = loadSettings();
+
+      // 将规则转换为 io_config items 格式
+      const items = rules.map(r => ({
+        name: r.serverName.split('.')[0] || `port-${r.listenPort}`,
+        port: parseInt(r.listenPort),
+        source_ip: r.targetHost,
+        source_port: parseInt(r.targetPort),
+        https: r.https === true,
+        path: r.path || '/',
+        server_name: r.serverName,
+        ghPageName: r.ghPageName || '',
+        ghPageFormat: r.ghPageFormat || 'worker.js'
+      }));
+
+      sendLog('info', `生成 nginx.conf (${items.length} 条规则)...`);
+
+      // 生成 nginx 配置
+      let conf = generateNginxConf(items, settings.nginx.sslDir);
+
+      // 写入临时文件并上传
+      const tmpFile = os.tmpdir() + '/nginx-conf-generated-' + Date.now() + '.conf';
+      fs.writeFileSync(tmpFile, conf, 'utf8');
+
+      sendLog('info', '上传配置到服务器...');
+      await sshSftp([{ local: tmpFile, remote: settings.nginx.confPath, backupDir: null }]);
+      fs.unlinkSync(tmpFile);
+
+      // 测试配置
+      sendLog('info', '测试 nginx 配置...');
+      const testRes = await sshExec('nginx -t', true);
+      if (testRes.code !== 0) {
+        sendLog('error', `nginx -t 失败: ${testRes.error}`);
+        return { ok: false, error: `配置测试失败: ${testRes.error}` };
+      }
+
+      // 重载
+      sendLog('info', '重载 nginx...');
+      await sshExec('nginx -s reload', true);
+
+      sendLog('info', `✅ 成功保存并重载 ${items.length} 个映射`);
+      return { ok: true, data: { items: items.length, generatedConf: conf } };
+    } catch (e) {
+      sendLog('error', `保存失败: ${e.message}`);
+      return { ok: false, error: e.message };
+    }
+  });
+
   // ── Nginx 状态 ──
   ipcMain.handle('nginx-status', async () => {
     try {

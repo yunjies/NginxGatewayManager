@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('api', {
   // 反代配置
   loadNginxConf: () => ipcRenderer.invoke('load-nginx-conf'),
   saveNginxConf: content => ipcRenderer.invoke('save-nginx-conf', content),
+  saveProxyRules: rules => ipcRenderer.invoke('save-proxy-rules', rules),
 
   // Nginx 状态
   nginxStatus: () => ipcRenderer.invoke('nginx-status'),

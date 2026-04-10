@@ -100,41 +100,55 @@
     <div class="page" id="page-proxy">
       <div class="page-header">
         <h2 class="page-title">🔀 反向代理配置</h2>
-        <p class="page-subtitle">可视化编辑 nginx 反代规则</p>
+        <p class="page-subtitle">可视化编辑 nginx 反代规则，支持内联编辑 + GitHub Pages 一键同步</p>
       </div>
 
       <div class="toolbar">
         <button class="btn btn-primary" onclick="loadProxyConfig()">📥 加载配置</button>
         <button class="btn btn-outline" onclick="saveProxyConfig()">💾 保存并重载</button>
-        <span class="toolbar-hint">← 先「加载配置」再编辑 | 保存后自动 nginx -t</span>
+        <div class="toolbar-sep"></div>
+        <button class="btn btn-outline" onclick="addProxyRow()">➕ 添加规则</button>
+        <button class="btn btn-success" onclick="syncAllToGithub()">🚀 全部同步 GitHub Pages</button>
+        <span class="toolbar-hint" id="proxy-toolbar-hint">← 先「加载配置」再编辑</span>
       </div>
 
-      <div class="proxy-layout">
-        <div class="card proxy-table-card">
-          <div class="card-title">📋 端口映射表</div>
-          <div class="proxy-hint">点击「加载配置」从服务器拉取</div>
-          <table class="proxy-table hidden" id="proxyTable">
+      <!-- 可编辑映射表 -->
+      <div class="card">
+        <div class="card-title">📋 反代规则（支持内联编辑）</div>
+        <div class="proxy-hint" id="proxy-hint">点击「加载配置」从服务器拉取</div>
+
+        <div class="table-wrapper">
+          <table class="proxy-table-editable hidden" id="proxyTableEditable">
             <thead>
               <tr>
-                <th>外部端口</th>
-                <th>域名</th>
-                <th>目标主机</th>
-                <th>目标端口</th>
-                <th>路径</th>
+                <th style="width:70px;">端口</th>
+                <th style="width:160px;">域名</th>
+                <th style="width:140px;">目标主机</th>
+                <th style="width:80px;">目标端口</th>
+                <th style="width:120px;">GH Page 名</th>
+                <th style="width:60px;">HTTPS</th>
+                <th style="width:100px;">操作</th>
               </tr>
             </thead>
             <tbody id="proxyTableBody"></tbody>
           </table>
         </div>
 
-        <div class="card proxy-editor-card">
-          <div class="card-title">📝 nginx.conf 原始编辑</div>
-          <div class="proxy-hint">在下方直接编辑原始配置</div>
-          <textarea class="conf-editor" id="confEditor" spellcheck="false" placeholder="点击「加载配置」后在此编辑..."></textarea>
+        <div class="table-footer hidden" id="proxyTableFooter">
+          <button class="btn btn-outline btn-sm" onclick="addProxyRow()">➕ 添加行</button>
+          <span class="footer-hint" id="row-count">0 条规则</span>
         </div>
       </div>
 
+      <!-- 高级：原始配置编辑器 -->
+      <details class="card details-advanced">
+        <summary class="details-summary">📝 原始 nginx.conf 编辑器（高级模式）</summary>
+        <textarea class="conf-editor" id="confEditor" spellcheck="false" placeholder="点击「加载配置」后在此编辑..."></textarea>
+      </details>
+
+      <!-- 日志 -->
       <div class="card hidden" id="proxy-log-card">
+        <div class="card-title">▶ 执行日志</div>
         <div class="log-box" id="proxy-log-box"></div>
       </div>
     </div>

@@ -171,62 +171,220 @@ if (dropZone) {
 }
 
 // ══════════════════════════════════════════════════════════
-// 反代配置页面
+// 反代配置页面（v2 - 内联编辑 + GH Pages 整合）
 // ══════════════════════════════════════════════════════════
+let proxyMappings = [];        // 当前编辑中的规则列表
+let originalConfContent = '';   // 原始 nginx.conf 内容
+let isDirty = false;
+
+// 加载服务器 nginx 配置 → 解析为可编辑表格
 async function loadProxyConfig() {
   clearLog('proxy-log-box');
-  appendLog('proxy-log-box', '正在从服务器加载 nginx 配置...');
   showCard('proxy-log-card');
+  appendLog('proxy-log-box', '正在从服务器加载 nginx 配置...');
   const res = await window.api.loadNginxConf();
   if (!res.ok) { appendLog('proxy-log-box', `加载失败: ${res.error}`, 'error'); return; }
+
   originalConfContent = res.data.content;
-  proxyMappings = res.data.mappings || [];
+  const rawMappings = res.data.mappings || [];
   isDirty = false;
 
-  const editor = document.getElementById('confEditor');
-  editor.value = originalConfContent;
-  editor.readOnly = false;
+  // 扩展映射：添加 ghPageName / https / isNew 字段
+  proxyMappings = rawMappings.map(m => ({
+    listenPort: m.listenPort || '',
+    serverName: m.serverName || '',
+    targetHost: m.targetHost || '',
+    targetPort: m.targetPort || '',
+    path: m.path || '/',
+    ghPageName: m.ghPageName || '',       // GitHub Pages 目录名
+    ghPageFormat: m.ghPageFormat || 'worker.js', // worker.js 或 index.html
+    https: m.https === true,              // 是否启用 HTTPS
+    _isNew: false,
+    _deleted: false
+  }));
 
-  const tbody = document.getElementById('proxyTableBody');
-  const table = document.getElementById('proxyTable');
-  tbody.innerHTML = '';
+  // 同步到原始编辑器
+  document.getElementById('confEditor').value = originalConfContent;
 
-  if (proxyMappings.length === 0) {
-    document.querySelector('.proxy-hint').textContent = '配置文件已加载，但未识别到端口映射';
-    table.classList.add('hidden');
-  } else {
-    document.querySelector('.proxy-hint').textContent = `识别到 ${proxyMappings.length} 个反代映射`;
-    table.classList.remove('hidden');
-    for (const m of proxyMappings) {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><span class="port-badge">${escHtml(m.listenPort)}</span></td>
-        <td>${escHtml(m.serverName)}</td>
-        <td>${escHtml(m.targetHost)}</td>
-        <td>${escHtml(m.targetPort)}</td>
-        <td>${escHtml(m.path)}</td>
-      `;
-      tbody.appendChild(tr);
-    }
-  }
+  renderProxyTable();
+  document.getElementById('proxy-hint').textContent = `已加载 ${proxyMappings.length} 条规则 — 可直接在表格中内联编辑`;
+  document.getElementById('proxy-toolbar-hint').textContent = '编辑后点「保存并重载」';
   appendLog('proxy-log-box', `已加载 ${proxyMappings.length} 个映射`, 'success');
 }
 
-async function saveProxyConfig() {
-  const content = document.getElementById('confEditor').value;
-  if (!isDirty && content === originalConfContent) {
-    appendLog('proxy-log-box', '配置未变化，无需保存', 'warn'); return;
+// 渲染可编辑表格
+function renderProxyTable() {
+  const tbody = document.getElementById('proxyTableBody');
+  const table = document.getElementById('proxyTableEditable');
+  const footer = document.getElementById('proxyTableFooter');
+  tbody.innerHTML = '';
+
+  const activeRows = proxyMappings.filter(r => !r._deleted);
+
+  if (activeRows.length === 0 && proxyMappings.length === 0) {
+    table.classList.add('hidden');
+    footer.classList.add('hidden');
+    return;
   }
+
+  table.classList.remove('hidden');
+  footer.classList.remove('hidden');
+  document.getElementById('row-count').textContent = `${activeRows.length} 条规则`;
+
+  for (let i = 0; i < proxyMappings.length; i++) {
+    const r = proxyMappings[i];
+    if (r._deleted) continue;
+
+    const tr = document.createElement('tr');
+    tr.dataset.index = i;
+    if (r._isNew) tr.classList.add('row-new');
+
+    tr.innerHTML = `
+      <td><input type="number" class="cell-input cell-port" value="${escHtml(String(r.listenPort))}" placeholder="端口" data-field="listenPort" data-idx="${i}"></td>
+      <td><input type="text" class="cell-input" value="${escHtml(r.serverName)}" placeholder="*.example.com" data-field="serverName" data-idx="${i}"></td>
+      <td><input type="text" class="cell-input" value="${escHtml(r.targetHost)}" placeholder="192.168.x.x" data-field="targetHost" data-idx="${i}"></td>
+      <td><input type="number" class="cell-input cell-port-sm" value="${escHtml(String(r.targetPort))}" placeholder="端口" data-field="targetPort" data-idx="${i}"></td>
+      <td><input type="text" class="cell-input cell-gh-name" value="${escHtml(r.ghPageName)}" placeholder="(可选)" title="GitHub Pages 目录名，留空则不生成" data-field="ghPageName" data-idx="${i}"></td>
+      <td class="cell-center"><label class="switch-wrap"><input type="checkbox" class="cell-checkbox" data-field="https" data-idx="${i}" ${r.https ? 'checked' : ''}><span class="switch-slider"></span></label></td>
+      <td class="cell-actions">
+        <button class="btn btn-outline btn-xs btn-action-del" onclick="deleteProxyRow(${i})" title="删除">🗑️</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  // 绑定输入事件
+  tbody.querySelectorAll('.cell-input, .cell-checkbox').forEach(el => {
+    el.addEventListener('input', onProxyCellChange);
+    el.addEventListener('change', onProxyCellChange);
+  });
+}
+
+// 单元格修改事件
+function onProxyCellChange(e) {
+  const idx = parseInt(e.target.dataset.idx);
+  const field = e.target.dataset.field;
+  if (isNaN(idx) || !field) return;
+
+  const row = proxyMappings[idx];
+  if (!row) return;
+
+  if (e.target.type === 'checkbox') {
+    row[field] = e.target.checked;
+  } else if (e.target.type === 'number') {
+    row[field] = parseInt(e.target.value) || '';
+  } else {
+    row[field] = e.target.value;
+  }
+  isDirty = true;
+
+  // 高亮当前行
+  const tr = e.target.closest('tr');
+  if (tr) tr.classList.add('row-dirty');
+}
+
+// 添加新行
+function addProxyRow() {
+  proxyMappings.push({
+    listenPort: '',
+    serverName: '',
+    targetHost: '',
+    targetPort: '',
+    path: '/',
+    ghPageName: '',
+    ghPageFormat: 'worker.js',
+    https: false,
+    _isNew: true,
+    _deleted: false
+  });
+  isDirty = true;
+  renderProxyTable();
+
+  // 滚动到底部，聚焦第一个输入框
+  const wrapper = document.querySelector('.table-wrapper');
+  if (wrapper) wrapper.scrollTop = wrapper.scrollHeight;
+  const firstInput = document.querySelector('#proxyTableBody tr:last-child .cell-input');
+  if (firstInput) firstInput.focus();
+}
+
+// 删除某行
+function deleteProxyRow(idx) {
+  const row = proxyMappings[idx];
+  if (!row) return;
+  if (row._isNew) {
+    // 新增的行直接从数组移除
+    proxyMappings.splice(idx, 1);
+  } else {
+    // 已存在的行标记为删除
+    row._deleted = true;
+  }
+  isDirty = true;
+  renderProxyTable();
+}
+
+// 保存配置：从表格数据重新生成 nginx.conf 并推送到服务器
+async function saveProxyConfig() {
+  const activeRows = proxyMappings.filter(r => !r._deleted);
+
+  // 验证必填字段
+  for (const r of activeRows) {
+    if (!r.listenPort) { alert(`请填写「${r.serverName || '第 ' + (proxyMappings.indexOf(r)+1) + ' 行'}」的外部端口`); return; }
+    if (!r.serverName) { alert(`请填写端口「${r.listenPort}」的域名`); return; }
+    if (!r.targetHost) { alert(`请填写「${r.serverName}」的目标主机`); return; }
+    if (!r.targetPort) { alert(`请填写「${r.serverName}」的目标端口`); return; }
+  }
+
   clearLog('proxy-log-box');
   showCard('proxy-log-card');
-  appendLog('proxy-log-box', '正在保存配置...');
-  const res = await window.api.saveNginxConf(content);
+  appendLog('proxy-log-box', `正在保存 ${activeRows.length} 条规则...`);
+
+  // 调用后端 API 保存（传入完整的映射列表）
+  const res = await window.api.saveProxyRules(activeRows);
+
   if (res.ok) {
-    originalConfContent = content;
+    originalConfContent = res.data.generatedConf;
+    document.getElementById('confEditor').value = originalConfContent;
     isDirty = false;
-    appendLog('proxy-log-box', '✅ 配置保存并生效', 'success');
+    // 清除所有 dirty/new 标记
+    proxyMappings.forEach(r => { r._isNew = false; });
+    renderProxyTable();
+    appendLog('proxy-log-box', `✅ 配置保存成功！nginx 已重载`, 'success');
   } else {
     appendLog('proxy-log-box', `❌ 保存失败: ${res.error}`, 'error');
+  }
+}
+
+// 全部同步到 GitHub Pages（为每条有 ghPageName 的规则生成 worker.js / index.html）
+async function syncAllToGithub() {
+  const activeRows = proxyMappings.filter(r => !r._deleted && r.ghPageName);
+  if (activeRows.length === 0) {
+    alert('没有需要同步的规则。\n请在表格中填写「GH Page 名」列来指定要生成的 GitHub Pages 服务。');
+    return;
+  }
+
+  if (!confirm(`将同步 ${activeRows.length} 个服务到 GitHub Pages？\n\n目标仓库将创建/更新以下目录:\n${activeRows.map(r => `  • ${r.ghPageName}/`).join('\n')}`)) {
+    return;
+  }
+
+  clearLog('proxy-log-box');
+  showCard('proxy-log-card');
+  appendLog('proxy-log-box', `🚀 开始同步 ${activeRows.length} 个服务到 GitHub Pages...`);
+
+  const services = activeRows.map(r => ({
+    id: r.ghPageName,
+    name: r.serverName.split('.')[0] || r.ghPageName,
+    targetUrl: `${r.https ? 'https' : 'http'}://${r.targetHost}:${r.targetPort}`,
+    description: `${r.serverName} → ${r.targetHost}:${r.targetPort}`,
+    format: r.ghPageFormat || 'worker.js'
+  }));
+
+  const res = await window.api.ghSyncBatch(services);
+
+  if (res.ok) {
+    const { success, failed } = res.data;
+    appendLog('proxy-log-box', `✅ 同步完成: ${success} 成功${failed > 0 ? `, ${failed} 失败` : ''}`, failed > 0 ? 'warn' : 'success');
+  } else {
+    appendLog('proxy-log-box', `❌ 同步失败: ${res.error}`, 'error');
   }
 }
 
